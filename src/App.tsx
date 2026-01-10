@@ -31,9 +31,6 @@ function App() {
   
   // Timing
   const startTimeRef = useRef<number | null>(null);
-  
-  // Notifications
-  const [notifications, setNotifications] = useState<string[]>([]);
 
   useEffect(() => {
     // Socket Event Listeners
@@ -52,25 +49,21 @@ function App() {
       console.log('Received global_start_round:', round);
       setRound(round);
       
-      // Start Countdown
-      setCountdown(3);
+      // Only do countdown for Round 1 (Lobby -> Game)
+      // For R2/R3, we just came from intermission which has its own timer.
+      if (round === 1) {
+        setCountdown(3);
+      } else {
+        setCountdown(null);
+        startTimeRef.current = Date.now();
+      }
+      
       setGameState('racing');
-      setNotifications([]); // Clear for new round
     });
 
     socket.on('round_finished', ({ rankings }) => {
       setRankings(rankings);
       setGameState('scoreboard');
-    });
-    
-    socket.on('player_finished', ({ name, rank }) => {
-       const suffix = (r: number) => {
-         if (r === 1) return 'st';
-         if (r === 2) return 'nd';
-         if (r === 3) return 'rd';
-         return 'th';
-       }
-       setNotifications(prev => [...prev, `${name} finished ${rank}${suffix(rank)}!`]);
     });
 
     socket.on('game_over', ({ rankings }) => {
@@ -82,7 +75,6 @@ function App() {
       socket.off('room_update');
       socket.off('global_start_round');
       socket.off('round_finished');
-      socket.off('player_finished');
       socket.off('game_over');
     };
   }, []);
@@ -95,8 +87,12 @@ function App() {
       const timer = setTimeout(() => setCountdown(c => (c as number) - 1), 1000);
       return () => clearTimeout(timer);
     } else {
-      setCountdown(null); // Finished
-      startTimeRef.current = Date.now(); // START TIMER
+      // Countdown is 0 (GO!), hold for a brief moment then start
+      const timer = setTimeout(() => {
+        setCountdown(null);
+        startTimeRef.current = Date.now(); // START TIMER
+      }, 500); // 0.5s duration for "GO!"
+      return () => clearTimeout(timer);
     }
   }, [countdown]);
 
@@ -186,29 +182,20 @@ function App() {
         {/* RACING VIEW */}
         {gameState === 'racing' && (
           <>
-            {/* NOTIFICATIONS */}
-            <div className="absolute top-20 right-4 flex flex-col gap-2 z-50 pointer-events-none">
-              {notifications.map((msg, i) => (
-                <div key={i} className="bg-slate-800/90 border border-green-500/30 text-green-300 px-4 py-2 rounded shadow-lg animate-fade-in text-sm font-mono">
-                  {msg}
-                </div>
-              ))}
-            </div>
-
-            {countdown !== null && (
-              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-                <div className="text-9xl font-bold text-white animate-pulse">
-                  {countdown > 0 ? countdown : "GO!"}
-                </div>
-              </div>
+            {countdown !== null ? (
+               <div className="fixed inset-0 bg-slate-900 flex items-center justify-center z-50">
+                 <div className="text-9xl font-bold text-white animate-pulse">
+                   {countdown > 0 ? countdown : "GO!"}
+                 </div>
+               </div>
+            ) : (
+              <TypingEngine 
+                key={round}
+                text={ROUND_TEXTS[round as keyof typeof ROUND_TEXTS]} 
+                onComplete={handleRaceComplete} 
+                disabled={false}
+              />
             )}
-            
-            <TypingEngine 
-              key={round}
-              text={ROUND_TEXTS[round as keyof typeof ROUND_TEXTS]} 
-              onComplete={handleRaceComplete} 
-              disabled={countdown !== null}
-            />
           </>
         )}
 
@@ -217,15 +204,6 @@ function App() {
            <div className="round-end animate-fade-in-up">
               <h2>FINISHED!</h2>
               <p className="text-slate-400">Waiting for other players...</p>
-              
-              {/* Also show notifications here just in case */}
-              <div className="flex flex-col gap-2 mt-4 items-center">
-                  {notifications.map((msg, i) => (
-                    <div key={i} className="text-slate-500 text-sm font-mono">
-                      {msg}
-                    </div>
-                  ))}
-              </div>
            </div>
         )}
 
@@ -267,19 +245,7 @@ function App() {
                ))}
             </div>
             
-            {isHost ? (
-               <button 
-                 onClick={handleStartGame}
-                 className="btn-next mt-8"
-                 style={{ fontSize: '1.25rem', padding: '1rem 2rem' }}
-               >
-                 PLAY AGAIN
-               </button>
-            ) : (
-               <p className="text-slate-400 mt-8 animate-pulse">Waiting for host to restart...</p>
-            )}
-            
-            {!isHost && <p className="text-slate-600 text-sm mt-4">(Only host can restart)</p>}
+            <p className="text-slate-400 mt-8">Refresh to play again</p>
           </div>
         )}
 
