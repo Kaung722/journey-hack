@@ -89,50 +89,23 @@ io.on('connection', (socket) => {
       player.totalDuration += duration;
     }
 
-    // Check if everyone finished
-    const allFinished = room.players.every(p => p.finishTime !== null);
+    // Check for round completion
+    checkRoundCompletion(room, roomId);
     
-    if (allFinished) {
-      // Sort players by round duration for intermediate scoreboard
-      const rankings = [...room.players].sort((a, b) => a.roundDuration - b.roundDuration);
-
-      if (room.round < 3) {
-        // Intermediate Round
-        room.status = 'scoreboard';
-        io.to(roomId).emit('round_finished', { rankings });
-        io.to(roomId).emit('room_update', room);
-        console.log(`Round ${room.round} finished in room ${roomId}. Starting 15s timer.`);
-
-        // Auto-start next round after 15 seconds
-        setTimeout(() => {
-          const currentRoom = rooms.get(roomId);
-          if (!currentRoom || currentRoom.status === 'racing') return;
-          
-          currentRoom.round += 1;
-          currentRoom.status = 'racing';
-          currentRoom.players.forEach(p => {
-             p.finishTime = null;
-             p.roundDuration = null;
-          });
-          
-          io.to(roomId).emit('global_start_round', { round: currentRoom.round });
-          io.to(roomId).emit('room_update', currentRoom);
-          console.log(`Auto-starting Round ${currentRoom.round} in room ${roomId}`);
-        }, 15000);
-
-      } else {
-         // Final Round - Game Over Immediately
-         room.status = 'victory';
-         // Sort by TOTAL duration
-         const finalRankings = [...room.players].sort((a, b) => a.totalDuration - b.totalDuration);
+    // If not finished, we are waiting
+    if (room.status === 'racing') {
+        // Optimistic update for the one who finished
+         // Actually, checkRoundCompletion handles updates if everyone finished.
+         // If NOT everyone finished, we need to tell this user (and others) that *this* user is waiting.
+         // Typically the client handles 'waiting' state based on finishTime > null.
+         // We should update the room status to 'waiting' if *at least one* person finished? 
+         // NO. 'waiting' status blindly forces everyone to wait screen (old bug).
+         // We keep status 'racing'. Individual clients see they are waiting.
          
-         io.to(roomId).emit('game_over', { rankings: finalRankings });
-         io.to(roomId).emit('room_update', room);
-         console.log(`Game Over in room ${roomId}`);
-      }
-    } else {
-      room.status = 'waiting';
-      io.to(roomId).emit('room_update', room);
+         // But we MUST emit room_update so clients know this player finished.
+         // checkRoundCompletion only emits if !allFinished?
+         // Let's check the helper I wrote above.
+         // It emits room_update in the !allFinished block.
     }
   });
 
@@ -154,17 +127,83 @@ io.on('connection', (socket) => {
     }
   });
 
+// Helper to check round completion and advance state
+const checkRoundCompletion = (room, roomId) => {
+    const allFinished = room.players.every(p => p.finishTime !== null);
+    if (!allFinished) {
+        if (room.status === 'racing' || room.status === 'waiting') {
+           // If we are waiting, ensure we stay waiting or go back to racing? 
+           // actually if someone left, we might still be waiting for others.
+           // no state change needed unless allFinished.
+           io.to(roomId).emit('room_update', room);
+        }
+        return;
+    }
+
+    // All finished!
+    // Sort players by round duration for intermediate scoreboard
+    const rankings = [...room.players].sort((a, b) => a.roundDuration - b.roundDuration);
+
+    if (room.round < 3) {
+      // Intermediate Round
+      room.status = 'scoreboard';
+      io.to(roomId).emit('round_finished', { rankings });
+      io.to(roomId).emit('room_update', room);
+      console.log(`Round ${room.round} finished in room ${roomId}. Starting 15s timer.`);
+
+      // Auto-start next round after 15 seconds
+      setTimeout(() => {
+        const currentRoom = rooms.get(roomId);
+        if (!currentRoom || currentRoom.status === 'racing') return;
+        
+        currentRoom.round += 1;
+        currentRoom.status = 'racing';
+        currentRoom.players.forEach(p => {
+           p.finishTime = null;
+           p.roundDuration = null;
+        });
+        
+        io.to(roomId).emit('global_start_round', { round: currentRoom.round });
+        io.to(roomId).emit('room_update', currentRoom);
+        console.log(`Auto-starting Round ${currentRoom.round} in room ${roomId}`);
+      }, 15000);
+
+    } else {
+       // Final Round - Game Over Immediately
+       room.status = 'victory';
+       // Sort by TOTAL duration
+       const finalRankings = [...room.players].sort((a, b) => a.totalDuration - b.totalDuration);
+       
+       io.to(roomId).emit('game_over', { rankings: finalRankings });
+       io.to(roomId).emit('room_update', room);
+       console.log(`Game Over in room ${roomId}`);
+    }
+};
+
   socket.on('disconnect', () => {
     console.log("User Disconnected", socket.id);
     // Remove player from rooms (Basic cleanup)
     rooms.forEach((room, roomId) => {
       const index = room.players.findIndex(p => p.id === socket.id);
       if (index !== -1) {
+        const player = room.players[index];
         room.players.splice(index, 1);
+        
         if (room.players.length === 0) {
           rooms.delete(roomId);
         } else {
-          io.to(roomId).emit('room_update', room);
+          // Host Migration
+          if (player.isHost) {
+             room.players[0].isHost = true;
+             console.log(`Host migrated to ${room.players[0].name} in room ${roomId}`);
+          }
+          
+          // Check if round should end (if we were the last one holding it up)
+          if (room.status === 'racing' || room.status === 'waiting') {
+             checkRoundCompletion(room, roomId);
+          } else {
+             io.to(roomId).emit('room_update', room);
+          }
         }
       }
     });
