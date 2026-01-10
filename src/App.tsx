@@ -23,7 +23,7 @@ function App() {
   const [players, setPlayers] = useState<Player[]>([]);
   
   const [round, setRound] = useState(1);
-  const [mana, setMana] = useState(0);
+  const [mana] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
 
   // Rankings for scoreboard
