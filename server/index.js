@@ -87,6 +87,14 @@ io.on('connection', (socket) => {
       player.finishTime = Date.now(); // Just to mark as done
       player.roundDuration = duration;
       player.totalDuration += duration;
+      
+      // Calculate Rank logic
+      const finishedCount = room.players.filter(p => p.finishTime !== null).length;
+      io.to(roomId).emit('player_finished', { 
+        playerId: socket.id, 
+        name: player.name, 
+        rank: finishedCount 
+      });
     }
 
     // Check if everyone finished
