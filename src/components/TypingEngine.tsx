@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface TypingEngineProps {
   text: string;
@@ -9,51 +9,37 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({ text, onComplete }) 
   const [userInput, setUserInput] = useState('');
   const [isFrozen, setIsFrozen] = useState(false);
   const [shake, setShake] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input on mount and keep focus
+  // Handle global keydown events
   useEffect(() => {
-    inputRef.current?.focus();
-    const handleBlur = () => setTimeout(() => inputRef.current?.focus(), 10);
-    window.addEventListener('blur', handleBlur); // Re-focus if window loses focus? Maybe too aggressive.
-    // Better: click anywhere to focus
-    const handleClick = () => inputRef.current?.focus();
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, []);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isFrozen) return;
 
-  useEffect(() => {
-    if (userInput === text) {
-      onComplete?.();
-    }
-  }, [userInput, text, onComplete]);
+      // Ignore modifiers and non-printable keys (except potential future backspace)
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key.length !== 1) return; // Only single characters
 
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isFrozen) return;
+      e.preventDefault(); // Prevent default browser actions (like scrolling with space)
 
-    const val = e.target.value;
-    
-    // We only care about the last character typed if it's an addition
-    if (val.length < userInput.length) {
-       // Backspace allowed? strict typing usually doesn't allow backspace if we want "one shot"
-       // But user request says "Any typo = 1-second keyboard freeze".
-       // Typically in these games, you can't backspace confirmed correct letters, 
-       // but you can't type incorrect ones. 
-       // Let's implement: input value MUST match the substring of text.
-       // If user types wrong char, we freeze and DON'T append it.
-       return; 
-    }
-    
-    const char = val.slice(-1);
-    const expectedChar = text[userInput.length];
+      const expectedChar = text[userInput.length];
+      
+      // Strict matching: Only accept the correct character
+      if (e.key === expectedChar) {
+        const nextInput = userInput + e.key;
+        setUserInput(nextInput);
+        
+        if (nextInput === text) {
+          onComplete?.();
+        }
+      } else {
+        // Wrong character typed
+        triggerPenalty();
+      }
+    };
 
-    if (val.length > userInput.length && char === expectedChar) {
-       setUserInput(val);
-    } else if (val.length > userInput.length) {
-       // Wrong character typed
-       triggerPenalty();
-    }
-  };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [userInput, isFrozen, text, onComplete]);
 
   const triggerPenalty = () => {
     setIsFrozen(true);
@@ -93,19 +79,6 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({ text, onComplete }) 
           );
         })}
       </div>
-
-      {/* Hidden Input for Logic */}
-      <input
-        ref={inputRef}
-        type="text"
-        value={userInput}
-        onChange={handleInput}
-        className="hidden-input"
-        autoFocus
-        autoComplete="off"
-        autoCapitalize="off"
-        spellCheck="false"
-      />
       
       <div className="status-message">
         {isFrozen ? "Type frozen! Wait..." : "Start typing..."}

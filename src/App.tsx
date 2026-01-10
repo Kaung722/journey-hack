@@ -1,15 +1,30 @@
 import { useState } from 'react'
 import { TypingEngine } from './components/TypingEngine'
+import { RestingRound } from './components/RestingRound'
+import { ROUND_TEXTS } from './data/gameData'
+
+type GameState = 'intro' | 'playing' | 'resting' | 'victory';
 
 function App() {
   const [round, setRound] = useState(1);
-  const [gameStatus, setGameStatus] = useState<'playing' | 'won'>('playing');
+  const [gameState, setGameState] = useState<GameState>('playing');
+  const [mana, setMana] = useState(0);
 
-  // Round 1 sample text
-  const text = "The quick brown fox jumps over the lazy dog.";
+  const currentText = ROUND_TEXTS[round as keyof typeof ROUND_TEXTS];
 
-  const handleComplete = () => {
-    setGameStatus('won');
+  const handleRoundComplete = () => {
+    if (round === 3) {
+      setGameState('victory');
+    } else {
+      setGameState('resting');
+      // Potential Mana Award logic here
+      setMana(m => m + 2); 
+    }
+  };
+
+  const handleNextRound = () => {
+    setRound(r => r + 1);
+    setGameState('playing');
   };
 
   return (
@@ -17,26 +32,33 @@ function App() {
       <header className="header">
         <h1 className="text-2xl font-bold tracking-tighter text-white">TYPE TACTICS</h1>
         <div className="header-stats">
-          <span>ROUND {round}/3</span>
-          <span>MANA: 0</span>
+          <span>ROUND {round > 3 ? 3 : round}/3</span>
+          <span>MANA: {mana}</span>
         </div>
       </header>
 
       <main style={{ marginTop: '4rem', width: '100%' }}>
-        {gameStatus === 'playing' ? (
-          <TypingEngine text={text} onComplete={handleComplete} />
-        ) : (
+        {gameState === 'playing' && (
+          <TypingEngine 
+            key={round} // Reset state on round change
+            text={currentText} 
+            onComplete={handleRoundComplete} 
+          />
+        )}
+
+        {gameState === 'resting' && (
+          <RestingRound round={round} onNext={handleNextRound} />
+        )}
+
+        {gameState === 'victory' && (
           <div className="round-end animate-fade-in-up">
-            <h2>ROUND COMPLETE</h2>
-            <p style={{ color: '#94a3b8' }}>Refreshing mana...</p>
+            <h2 style={{ fontSize: '4rem', color: '#fbbf24' }}>VICTORY</h2>
+            <p>You have conquered the keyboard.</p>
             <button 
-              onClick={() => {
-                setGameStatus('playing'); 
-                setRound(r => r + 1);
-              }}
+              onClick={() => window.location.reload()}
               className="btn-next"
             >
-              Next Round
+              Play Again
             </button>
           </div>
         )}
