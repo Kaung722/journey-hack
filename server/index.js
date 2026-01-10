@@ -220,6 +220,19 @@ const checkRoundCompletion = (room, roomId) => {
              console.log(`Host migrated to ${room.players[0].name} in room ${roomId}`);
           }
           
+          // LAST MAN STANDING RULE
+          if (room.status !== 'lobby' && room.players.length === 1) {
+              console.log(`Room ${roomId}: Only 1 player left. Game Over.`);
+              room.status = 'victory';
+              const survivor = room.players[0];
+              // Survivor gets 1st place
+              const rankings = [survivor];
+              
+              io.to(roomId).emit('game_over', { rankings });
+              io.to(roomId).emit('room_update', room);
+              return; // Stop further processing
+          }
+
           // Check if round should end (if we were the last one holding it up)
           if (room.status === 'racing' || room.status === 'waiting') {
              checkRoundCompletion(room, roomId);

@@ -81,9 +81,7 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({ text, onComplete, di
         })}
       </div>
       
-      <div className="status-message">
-        {isFrozen ? "Type frozen! Wait..." : "Start typing..."}
-      </div>
+
     </div>
   );
 };
