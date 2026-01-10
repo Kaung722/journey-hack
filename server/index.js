@@ -49,6 +49,8 @@ io.on('connection', (socket) => {
         id: socket.id,
         name: username || `Player ${room.players.length + 1}`,
         finishTime: null,
+        roundDuration: null,
+        totalDuration: 0,
         isHost: isFirstPlayer
       });
     }
@@ -64,7 +66,11 @@ io.on('connection', (socket) => {
       room.status = 'racing';
       room.round = 1;
       // Reset times
-      room.players.forEach(p => p.finishTime = null);
+      room.players.forEach(p => {
+        p.finishTime = null;
+        p.roundDuration = null;
+        p.totalDuration = 0; // Reset total for new game
+      });
       
       io.to(roomId).emit('global_start_round', { round: 1 });
       io.to(roomId).emit('room_update', room);
@@ -72,26 +78,58 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('submit_result', ({ roomId, timeTaken }) => {
+  socket.on('submit_result', ({ roomId, duration }) => {
     const room = rooms.get(roomId);
     if (!room) return;
 
     const player = room.players.find(p => p.id === socket.id);
     if (player) {
-      player.finishTime = timeTaken;
+      player.finishTime = Date.now(); // Just to mark as done
+      player.roundDuration = duration;
+      player.totalDuration += duration;
     }
 
     // Check if everyone finished
     const allFinished = room.players.every(p => p.finishTime !== null);
     
     if (allFinished) {
-      room.status = 'scoreboard';
-      // Sort players by time (asc)
-      const rankings = [...room.players].sort((a, b) => a.finishTime - b.finishTime);
-      
-      io.to(roomId).emit('round_finished', { rankings });
-      io.to(roomId).emit('room_update', room);
-      console.log(`Round finished in room ${roomId}`);
+      // Sort players by round duration for intermediate scoreboard
+      const rankings = [...room.players].sort((a, b) => a.roundDuration - b.roundDuration);
+
+      if (room.round < 3) {
+        // Intermediate Round
+        room.status = 'scoreboard';
+        io.to(roomId).emit('round_finished', { rankings });
+        io.to(roomId).emit('room_update', room);
+        console.log(`Round ${room.round} finished in room ${roomId}. Starting 15s timer.`);
+
+        // Auto-start next round after 15 seconds
+        setTimeout(() => {
+          const currentRoom = rooms.get(roomId);
+          if (!currentRoom || currentRoom.status === 'racing') return;
+          
+          currentRoom.round += 1;
+          currentRoom.status = 'racing';
+          currentRoom.players.forEach(p => {
+             p.finishTime = null;
+             p.roundDuration = null;
+          });
+          
+          io.to(roomId).emit('global_start_round', { round: currentRoom.round });
+          io.to(roomId).emit('room_update', currentRoom);
+          console.log(`Auto-starting Round ${currentRoom.round} in room ${roomId}`);
+        }, 15000);
+
+      } else {
+         // Final Round - Game Over Immediately
+         room.status = 'victory';
+         // Sort by TOTAL duration
+         const finalRankings = [...room.players].sort((a, b) => a.totalDuration - b.totalDuration);
+         
+         io.to(roomId).emit('game_over', { rankings: finalRankings });
+         io.to(roomId).emit('room_update', room);
+         console.log(`Game Over in room ${roomId}`);
+      }
     } else {
       room.status = 'waiting';
       io.to(roomId).emit('room_update', room);

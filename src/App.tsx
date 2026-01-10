@@ -1,16 +1,18 @@
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { TypingEngine } from './components/TypingEngine'
 import { RestingRound } from './components/RestingRound'
 import { ROUND_TEXTS } from './data/gameData'
 import { socket } from './services/socket'
 
-type GameState = 'lobby' | 'racing' | 'waiting' | 'scoreboard' | 'strategy';
+type GameState = 'lobby' | 'racing' | 'waiting' | 'scoreboard' | 'strategy' | 'victory';
 
 interface Player {
   id: string;
   name: string;
   finishTime: number | null;
+  roundDuration?: number;
+  totalDuration?: number;
   isHost?: boolean;
 }
 
@@ -26,6 +28,9 @@ function App() {
 
   // Rankings for scoreboard
   const [rankings, setRankings] = useState<Player[]>([]);
+  
+  // Timing
+  const startTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     // Socket Event Listeners
@@ -33,6 +38,11 @@ function App() {
     socket.on('room_update', (room) => {
       console.log('Received room_update:', room);
       setPlayers(room.players);
+      
+      // Sync game state if joining late or reconnecting (basic sync)
+      if (room.status === 'victory') {
+         setGameState('victory');
+      }
     });
 
     socket.on('global_start_round', ({ round }) => {
@@ -47,13 +57,18 @@ function App() {
     socket.on('round_finished', ({ rankings }) => {
       setRankings(rankings);
       setGameState('scoreboard');
-      // Award Mana logic could go here or server-side
+    });
+
+    socket.on('game_over', ({ rankings }) => {
+      setRankings(rankings);
+      setGameState('victory');
     });
 
     return () => {
       socket.off('room_update');
       socket.off('global_start_round');
       socket.off('round_finished');
+      socket.off('game_over');
     };
   }, []);
 
@@ -66,6 +81,7 @@ function App() {
       return () => clearTimeout(timer);
     } else {
       setCountdown(null); // Finished
+      startTimeRef.current = Date.now(); // START TIMER
     }
   }, [countdown]);
 
@@ -81,18 +97,15 @@ function App() {
     socket.emit('start_game', roomId);
   };
 
-  const handleNextRound = () => {
-    socket.emit('next_round', roomId);
-  };
 
   const handleRaceComplete = () => {
     // User finished typing
     setGameState('waiting');
     
-    // Calculate time (Prototype: just random for now, or track start time)
-    // For real implementation: track Date.now() at start vs end
-    const timeTaken = Date.now(); // Placeholder acts as timestamp
-    socket.emit('submit_result', { roomId, timeTaken });
+    const endTime = Date.now();
+    const duration = startTimeRef.current ? endTime - startTimeRef.current : 0;
+    
+    socket.emit('submit_result', { roomId, duration });
   };
   
   // Find current player to check if Host
@@ -104,7 +117,7 @@ function App() {
       <header className="header">
         <h1 className="text-2xl font-bold tracking-tighter text-white">TYPE TACTICS</h1>
         <div className="header-stats">
-          <span>{gameState === 'lobby' ? 'LOBBY' : `ROUND ${round}/3`}</span>
+          <span>{gameState === 'lobby' ? 'LOBBY' : gameState === 'victory' ? 'VICTORY' : `ROUND ${round}/3`}</span>
           <span>MANA: {mana}</span>
         </div>
       </header>
@@ -189,18 +202,39 @@ function App() {
             <h2>ROUND {round} RESULTS</h2>
             <div className="flex flex-col gap-2 my-4 bg-slate-800 p-6 rounded items-start max-w-md mx-auto">
                {rankings.map((p, i) => (
-                 <div key={p.id} className="flex justify-between w-full font-mono text-lg">
+                 <div key={p.id} className="flex justify-between w-full font-mono text-lg gap-8">
                     <span className={p.id === socket.id ? 'text-green-400 font-bold' : 'text-slate-300'}>
                       #{i+1} {p.name}
                     </span>
-                    <span className="text-slate-500">
-                      Finished
+                    <span className="text-yellow-400">
+                      {p.roundDuration ? (p.roundDuration / 1000).toFixed(2) + 's' : '-'}
                     </span>
                  </div>
                ))}
             </div>
             
-            <RestingRound round={round} onNext={handleNextRound} />
+            <RestingRound round={round} />
+          </div>
+        )}
+
+        {/* VICTORY VIEW */}
+        {gameState === 'victory' && (
+          <div className="round-end animate-fade-in-up">
+            <h2 className="text-4xl text-yellow-500 mb-4">FINAL LEADERBOARD</h2>
+            <div className="flex flex-col gap-2 my-4 bg-slate-800 p-6 rounded items-start max-w-md mx-auto border-2 border-yellow-600">
+               {rankings.map((p, i) => (
+                 <div key={p.id} className="flex justify-between w-full font-mono text-lg gap-8">
+                    <span className={p.id === socket.id ? 'text-green-400 font-bold' : 'text-slate-300'}>
+                      #{i+1} {p.name}
+                    </span>
+                    <span className="text-yellow-400 font-bold">
+                       {p.totalDuration ? (p.totalDuration / 1000).toFixed(2) + 's' : '-'}
+                    </span>
+                 </div>
+               ))}
+            </div>
+            
+            <p className="text-slate-400 mt-8">Refresh to play again</p>
           </div>
         )}
 

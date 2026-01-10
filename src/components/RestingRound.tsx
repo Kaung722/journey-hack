@@ -1,11 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface RestingRoundProps {
   round: number;
-  onNext: () => void;
 }
 
-export const RestingRound: React.FC<RestingRoundProps> = ({ round, onNext }) => {
+export const RestingRound: React.FC<RestingRoundProps> = ({ round }) => {
+  const [timeLeft, setTimeLeft] = useState(15);
+
+  useEffect(() => {
+    if (timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [timeLeft]);
+
   return (
     <div className="round-end animate-fade-in-up">
       <h2>ROUND {round} COMPLETE</h2>
@@ -20,13 +28,9 @@ export const RestingRound: React.FC<RestingRoundProps> = ({ round, onNext }) => 
         </p>
       </div>
 
-      <button 
-        onClick={onNext}
-        className="btn-next"
-        style={{ fontSize: '1.5rem', padding: '1rem 3rem' }}
-      >
-        START ROUND {round + 1}
-      </button>
+      <div className="text-2xl font-mono text-green-400">
+        Next round starts in {timeLeft}...
+      </div>
     </div>
   );
 };
