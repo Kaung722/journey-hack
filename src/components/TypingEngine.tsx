@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 interface TypingEngineProps {
   text: string;
   onComplete?: () => void;
+  disabled?: boolean;
 }
 
-export const TypingEngine: React.FC<TypingEngineProps> = ({ text, onComplete }) => {
+export const TypingEngine: React.FC<TypingEngineProps> = ({ text, onComplete, disabled }) => {
   const [userInput, setUserInput] = useState('');
   const [isFrozen, setIsFrozen] = useState(false);
   const [shake, setShake] = useState(false);
@@ -13,7 +14,7 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({ text, onComplete }) 
   // Handle global keydown events
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isFrozen) return;
+      if (disabled || isFrozen) return;
 
       // Ignore modifiers and non-printable keys (except potential future backspace)
       if (e.ctrlKey || e.altKey || e.metaKey) return;
