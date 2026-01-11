@@ -164,7 +164,7 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
   return (
     <div className="typing-container relative">
         {/* Buff Indicators */}
-        <div className="absolute -top-8 left-0 flex gap-2">
+        <div className="absolute -top-8 left-0 flex gap-2 flex-wrap">
             {shieldCount > 0 && (
                 <span className="bg-blue-500/20 text-blue-400 border border-blue-500/50 px-2 py-0.5 rounded text-xs font-bold animate-pulse">
                     SHIELD: {shieldCount}
@@ -173,6 +173,22 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
             {timeBonus > 0 && (
                 <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-2 py-0.5 rounded text-xs font-bold">
                     TIME WARP (-2s)
+                </span>
+            )}
+            {/* Attack Indicators */}
+            {initialSpells.includes('heavy_freeze') && (
+                <span className="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-xs font-bold animate-pulse">
+                    BRAIN FREEZE (1.5s PENALTY)
+                </span>
+            )}
+            {initialSpells.includes('symbol_storm') && (
+                <span className="bg-purple-500/20 text-purple-400 border border-purple-500/50 px-2 py-0.5 rounded text-xs font-bold">
+                    SYMBOL STORM
+                </span>
+            )}
+            {initialSpells.includes('gibberish') && (
+                <span className="bg-pink-500/20 text-pink-400 border border-pink-500/50 px-2 py-0.5 rounded text-xs font-bold">
+                    VOID BABBLE
                 </span>
             )}
         </div>
