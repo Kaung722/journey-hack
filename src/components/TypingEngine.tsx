@@ -71,7 +71,7 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
     }
     
     if (initialSpells.includes('time_warp')) {
-       newTimeBonus = 3000;
+       newTimeBonus = 2000;
     }
 
     setLocalText(modifiedText);
@@ -172,7 +172,7 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
             )}
             {timeBonus > 0 && (
                 <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-2 py-0.5 rounded text-xs font-bold">
-                    TIME WARP (-3s)
+                    TIME WARP (-2s)
                 </span>
             )}
         </div>

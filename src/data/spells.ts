@@ -40,7 +40,7 @@ export const SPELLS: Spell[] = [
   {
     id: 'time_warp',
     name: 'Time Warp',
-    description: 'Deducts 3 seconds from your race duration.',
+    description: 'Deducts 2 seconds from your race duration.',
     type: 'buff',
     cooldown: 0
   }
