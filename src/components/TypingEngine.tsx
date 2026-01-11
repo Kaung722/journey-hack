@@ -11,6 +11,7 @@ interface TypingEngineProps {
 export const TypingEngine: React.FC<TypingEngineProps> = ({ 
   text, onComplete, disabled, initialSpells = []
 }) => {
+  // Use localText so we can modify it with spells (Symbol Storm)
   const [localText, setLocalText] = useState(text);
   const [userInput, setUserInput] = useState('');
   
@@ -19,6 +20,17 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
   
   const [isFrozen, setIsFrozen] = useState(false);
   const [shake, setShake] = useState(false);
+  const [penaltyDuration, setPenaltyDuration] = useState(1000); // Default 1s freeze
+
+  // Helper to generate gibberish
+  const generateGibberish = (length: number) => {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+       result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
   
   // Sync Ref
   useEffect(() => {
@@ -28,16 +40,29 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
   // Initialize text with any active spells applied immediately
   useEffect(() => {
     let modifiedText = text;
+    let newPenaltyDuration = 1000;
     
     // Apply Start-of-Round Spells
     if (initialSpells.includes('symbol_storm')) {
-       const storm = ";{{/.";
-       // Insert at start since game just started
+       // Insert 4 special chars
+       const storm = ";{{/"; 
        modifiedText = storm + modifiedText; 
        console.log('Applied Symbol Storm at start');
     }
+    
+    if (initialSpells.includes('gibberish')) {
+       const gibberish = generateGibberish(6);
+       modifiedText = gibberish + modifiedText;
+       console.log('Applied Gibberish at start');
+    }
+
+    if (initialSpells.includes('heavy_freeze')) {
+       newPenaltyDuration = 1500;
+       console.log('Applied Heavy Freeze penalty modifier');
+    }
 
     setLocalText(modifiedText);
+    setPenaltyDuration(newPenaltyDuration);
     setUserInput('');
     setIsFrozen(false);
   }, [text, initialSpells]);
@@ -47,16 +72,29 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
     const handleReceiveSpell = (data: { spellId: string, casterId: string }) => {
       console.log('SPELL HIT CLIENT:', data);
       
-      if (data.spellId === 'symbol_storm') {
-        const storm = ";{{/.";
-        setLocalText(prev => {
-           // Insert at current cursor position
-           const cursor = userInputRef.current.length;
-           const before = prev.slice(0, cursor);
-           const after = prev.slice(cursor);
-           return before + storm + after;
-        });
-        triggerPenalty(); // Brief freeze/shake to indicate impact
+      setLocalText(prev => {
+         const cursor = userInputRef.current.length;
+         const before = prev.slice(0, cursor);
+         const after = prev.slice(cursor);
+         
+         if (data.spellId === 'symbol_storm') {
+            const storm = ";{{/";
+            triggerPenalty(); 
+            return before + storm + after;
+         }
+         
+         if (data.spellId === 'gibberish') {
+            const gibberish = generateGibberish(6);
+            triggerPenalty();
+            return before + gibberish + after; 
+         }
+         
+         return prev;
+      });
+
+      if (data.spellId === 'heavy_freeze') {
+         setPenaltyDuration(1500);
+         triggerPenalty(); // Immediate freeze to signal the curse
       }
     };
 
@@ -91,13 +129,13 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [userInput, isFrozen, localText, onComplete, disabled]);
+  }, [userInput, isFrozen, localText, onComplete, disabled, penaltyDuration]);
 
   const triggerPenalty = () => {
     setIsFrozen(true);
     setShake(true);
     setTimeout(() => setShake(false), 500);
-    setTimeout(() => setIsFrozen(false), 1000);
+    setTimeout(() => setIsFrozen(false), penaltyDuration);
   };
 
   return (
@@ -106,7 +144,7 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
       {/* Visual Feedback for Freeze */}
       {isFrozen && (
         <div className="freeze-badge">
-           FROZEN (1s)
+           FROZEN ({penaltyDuration / 1000}s)
         </div>
       )}
 
