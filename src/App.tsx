@@ -115,12 +115,18 @@ function App() {
   };
 
 
-  const handleRaceComplete = () => {
+  const handleRaceComplete = (bonusMs = 0) => {
     // User finished typing
     setGameState('waiting');
     
     const endTime = Date.now();
-    const duration = startTimeRef.current ? endTime - startTimeRef.current : 0;
+    let duration = startTimeRef.current ? endTime - startTimeRef.current : 0;
+    
+    // Apply Time Warp buff
+    if (bonusMs > 0) {
+        duration = Math.max(0, duration - bonusMs);
+        console.log(`Applied Time Warp: Reduced by ${bonusMs}ms, New Duration: ${duration}`);
+    }
     
     socket.emit('submit_result', { roomId, duration });
   };

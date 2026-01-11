@@ -163,8 +163,8 @@ const checkRoundCompletion = (room, roomId) => {
     }
 
     // All finished!
-    // Sort players by round duration for intermediate scoreboard
-    const rankings = [...room.players].sort((a, b) => a.roundDuration - b.roundDuration);
+    // Sort players by TOTAL duration for intermediate scoreboard
+    const rankings = [...room.players].sort((a, b) => a.totalDuration - b.totalDuration);
 
     if (room.round < 3) {
       // Intermediate Round
@@ -184,27 +184,46 @@ const checkRoundCompletion = (room, roomId) => {
         // --- SPELL RESOLUTION PHASE ---
         const activeSpells = {}; // Map<PlayerId, SpellId[]>
 
-        // Sort by previous round performance to determine "front" (Fastest first)
+        // Sort by TOTAL duration to determine "front" (Fastest cumulative first)
         const sortedPlayers = [...currentRoom.players].sort((a, b) => {
              // Handle DNF (null) being last
-             if (a.roundDuration === null) return 1;
-             if (b.roundDuration === null) return -1;
-             return a.roundDuration - b.roundDuration;
+             if (a.totalDuration === null) return 1;
+             if (b.totalDuration === null) return -1;
+             return a.totalDuration - b.totalDuration;
         });
 
         // Logic: Player at sorted index i attacks player at sorted index i-1.
-        sortedPlayers.forEach((attacker, index) => {
-            if (attacker.selectedSpell && index > 0) {
-                const target = sortedPlayers[index - 1];
-                console.log(`SPELL APPLIED: ${attacker.name} used ${attacker.selectedSpell} on ${target.name}`);
-                
-                if (!activeSpells[target.id]) {
-                    activeSpells[target.id] = [];
-                }
-                activeSpells[target.id].push(attacker.selectedSpell);
+        // OR applies buff to self.
+        const BUFFS = ['shield', 'time_warp'];
 
-            } else if (attacker.selectedSpell && index === 0) {
-                console.log(`SPELL WASTED: ${attacker.name} used ${attacker.selectedSpell} (No one in front)`);
+        sortedPlayers.forEach((attacker, index) => {
+            if (!attacker.selectedSpell) return;
+
+            const spellId = attacker.selectedSpell;
+            const isBuff = BUFFS.includes(spellId);
+
+            if (isBuff) {
+                // Apply to SELF
+                console.log(`BUFF APPLIED: ${attacker.name} used ${spellId} on THEMSELVES`);
+                if (!activeSpells[attacker.id]) {
+                    activeSpells[attacker.id] = [];
+                }
+                activeSpells[attacker.id].push(spellId);
+
+            } else {
+                // ATTACK Logic (Target Rank N-1)
+                if (index > 0) {
+                    const target = sortedPlayers[index - 1];
+                    console.log(`SPELL APPLIED: ${attacker.name} used ${spellId} on ${target.name}`);
+                    
+                    if (!activeSpells[target.id]) {
+                        activeSpells[target.id] = [];
+                    }
+                    activeSpells[target.id].push(spellId);
+
+                } else {
+                    console.log(`SPELL WASTED: ${attacker.name} used ${spellId} (No one in front)`);
+                }
             }
             
             // Clear spell after processing

@@ -3,7 +3,7 @@ import { socket } from '../services/socket';
 
 interface TypingEngineProps {
   text: string;
-  onComplete?: () => void;
+  onComplete?: (bonusMs?: number) => void;
   disabled?: boolean;
   initialSpells?: string[];
 }
@@ -21,6 +21,10 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
   const [isFrozen, setIsFrozen] = useState(false);
   const [shake, setShake] = useState(false);
   const [penaltyDuration, setPenaltyDuration] = useState(1000); // Default 1s freeze
+  
+  // Buff States
+  const [shieldCount, setShieldCount] = useState(0);
+  const [timeBonus, setTimeBonus] = useState(0);
 
   // Helper to generate gibberish
   const generateGibberish = (length: number) => {
@@ -41,19 +45,19 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
   useEffect(() => {
     let modifiedText = text;
     let newPenaltyDuration = 1000;
+    let newShieldCount = 0;
+    let newTimeBonus = 0;
     
-    // Apply Start-of-Round Spells
+    // OFFENSIVE SPELLS
     if (initialSpells.includes('symbol_storm')) {
        // Insert 4 special chars
        const storm = ";{{/"; 
        modifiedText = storm + modifiedText; 
-       console.log('Applied Symbol Storm at start');
     }
     
     if (initialSpells.includes('gibberish')) {
        const gibberish = generateGibberish(6);
        modifiedText = gibberish + modifiedText;
-       console.log('Applied Gibberish at start');
     }
 
     if (initialSpells.includes('heavy_freeze')) {
@@ -61,8 +65,20 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
        console.log('Applied Heavy Freeze penalty modifier');
     }
 
+    // DEFENSIVE BUFFS
+    if (initialSpells.includes('shield')) {
+       newShieldCount = 5;
+    }
+    
+    if (initialSpells.includes('time_warp')) {
+       newTimeBonus = 3000;
+    }
+
     setLocalText(modifiedText);
     setPenaltyDuration(newPenaltyDuration);
+    setShieldCount(newShieldCount);
+    setTimeBonus(newTimeBonus);
+    
     setUserInput('');
     setIsFrozen(false);
   }, [text, initialSpells]);
@@ -120,7 +136,7 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
         setUserInput(nextInput);
         
         if (nextInput === localText) {
-          onComplete?.();
+          onComplete?.(timeBonus);
         }
       } else {
         triggerPenalty();
@@ -129,9 +145,16 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [userInput, isFrozen, localText, onComplete, disabled, penaltyDuration]);
+  }, [userInput, isFrozen, localText, onComplete, disabled, penaltyDuration, shieldCount, timeBonus]);
 
   const triggerPenalty = () => {
+    // Check Shield
+    if (shieldCount > 0) {
+        setShieldCount(prev => prev - 1);
+        // Maybe visual effect for block?
+        return;
+    }
+
     setIsFrozen(true);
     setShake(true);
     setTimeout(() => setShake(false), 500);
@@ -140,6 +163,19 @@ export const TypingEngine: React.FC<TypingEngineProps> = ({
 
   return (
     <div className="typing-container relative">
+        {/* Buff Indicators */}
+        <div className="absolute -top-8 left-0 flex gap-2">
+            {shieldCount > 0 && (
+                <span className="bg-blue-500/20 text-blue-400 border border-blue-500/50 px-2 py-0.5 rounded text-xs font-bold animate-pulse">
+                    SHIELD: {shieldCount}
+                </span>
+            )}
+            {timeBonus > 0 && (
+                <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-2 py-0.5 rounded text-xs font-bold">
+                    TIME WARP (-3s)
+                </span>
+            )}
+        </div>
       
       {/* Visual Feedback for Freeze */}
       {isFrozen && (
