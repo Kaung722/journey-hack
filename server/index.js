@@ -180,14 +180,52 @@ const checkRoundCompletion = (room, roomId) => {
         
         currentRoom.round += 1;
         currentRoom.status = 'racing';
+        
+        // --- SPELL RESOLUTION PHASE ---
+        const activeSpells = {}; // Map<PlayerId, SpellId[]>
+
+        // Sort by previous round performance to determine "front" (Fastest first)
+        const sortedPlayers = [...currentRoom.players].sort((a, b) => {
+             // Handle DNF (null) being last
+             if (a.roundDuration === null) return 1;
+             if (b.roundDuration === null) return -1;
+             return a.roundDuration - b.roundDuration;
+        });
+
+        // Logic: Player at sorted index i attacks player at sorted index i-1.
+        sortedPlayers.forEach((attacker, index) => {
+            if (attacker.selectedSpell && index > 0) {
+                const target = sortedPlayers[index - 1];
+                console.log(`SPELL APPLIED: ${attacker.name} used ${attacker.selectedSpell} on ${target.name}`);
+                
+                if (!activeSpells[target.id]) {
+                    activeSpells[target.id] = [];
+                }
+                activeSpells[target.id].push(attacker.selectedSpell);
+
+            } else if (attacker.selectedSpell && index === 0) {
+                console.log(`SPELL WASTED: ${attacker.name} used ${attacker.selectedSpell} (No one in front)`);
+            }
+            
+            // Clear spell after processing
+            attacker.selectedSpell = null;
+        });
+        
         currentRoom.players.forEach(p => {
            p.finishTime = null;
            p.roundDuration = null;
+           p.selectedSpell = null; 
         });
         
-        io.to(roomId).emit('global_start_round', { round: currentRoom.round });
+        // Send Round Start + Spells together so clients can init correctly
+        io.to(roomId).emit('global_start_round', { 
+            round: currentRoom.round, 
+            activeSpells 
+        });
+        
         io.to(roomId).emit('room_update', currentRoom);
         console.log(`Auto-starting Round ${currentRoom.round} in room ${roomId}`);
+        // ------------------------------
       }, 15000);
 
     } else {
@@ -201,6 +239,30 @@ const checkRoundCompletion = (room, roomId) => {
        console.log(`Game Over in room ${roomId}`);
     }
 };
+
+  socket.on('select_spell', ({ roomId, spellId }) => {
+    const room = rooms.get(roomId);
+    if (room) {
+      const player = room.players.find(p => p.id === socket.id);
+      if (player) {
+         player.selectedSpell = spellId;
+         // Broadcast update so others (and self) know selection is registered
+         io.to(roomId).emit('room_update', room);
+      }
+    }
+  });
+
+  socket.on('cast_spell', ({ roomId, targetId, spellId }) => {
+     console.log(`Spell ${spellId} cast by ${socket.id} on ${targetId}`);
+     // Forward to the target
+     io.to(targetId).emit('receive_spell', { 
+         spellId, 
+         casterId: socket.id 
+     });
+     
+     // Optional: Emit to room for visual effects (e.g. "Player X cast Spell Y!")
+     // io.to(roomId).emit('spell_cast_notify', { casterId: socket.id, targetId, spellId });
+  });
 
   socket.on('disconnect', () => {
     console.log("User Disconnected", socket.id);

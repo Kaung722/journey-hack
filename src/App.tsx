@@ -14,6 +14,7 @@ interface Player {
   roundDuration?: number;
   totalDuration?: number;
   isHost?: boolean;
+  selectedSpell?: string | null;
 }
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
   const [players, setPlayers] = useState<Player[]>([]);
   
   const [round, setRound] = useState(1);
+  const [initialSpells, setInitialSpells] = useState<string[]>([]);
   const [mana] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
 
@@ -45,10 +47,14 @@ function App() {
       }
     });
 
-    socket.on('global_start_round', ({ round }) => {
-      console.log('Received global_start_round:', round);
+    socket.on('global_start_round', ({ round, activeSpells }) => {
+      console.log('Received global_start_round:', round, activeSpells);
       setRound(round);
       
+      // Check if we are targeted by any spells
+      const mySpells = activeSpells?.[socket.id] || [];
+      setInitialSpells(mySpells);
+
       // Only do countdown for Round 1 (Lobby -> Game)
       // For R2/R3, we just came from intermission which has its own timer.
       if (round === 1) {
@@ -225,6 +231,7 @@ function App() {
                   text={ROUND_TEXTS[round as keyof typeof ROUND_TEXTS]} 
                   onComplete={handleRaceComplete} 
                   disabled={false}
+                  initialSpells={initialSpells}
                 />
               </div>
             )}
@@ -269,7 +276,7 @@ function App() {
               </div>
             </div>
             
-            <RestingRound round={round}/>
+            <RestingRound round={round} roomId={roomId}/>
           </div>
         )}
 
