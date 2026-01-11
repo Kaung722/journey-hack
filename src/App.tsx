@@ -282,7 +282,11 @@ function App() {
               </div>
             </div>
             
-            <RestingRound round={round} roomId={roomId}/>
+            <RestingRound 
+                round={round} 
+                roomId={roomId}
+                rank={rankings.findIndex(p => p.id === socket.id)}
+            />
           </div>
         )}
 

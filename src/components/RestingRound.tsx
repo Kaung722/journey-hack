@@ -5,11 +5,17 @@ import { socket } from '../services/socket';
 interface RestingRoundProps {
   round: number;
   roomId: string;
+  rank: number;
 }
 
-export const RestingRound: React.FC<RestingRoundProps> = ({ round, roomId }) => {
+export const RestingRound: React.FC<RestingRoundProps> = ({ round, roomId, rank }) => {
   const [timeLeft, setTimeLeft] = useState(15);
   const [selectedSpellId, setSelectedSpellId] = useState<string | null>(null);
+
+  // Filter spells: 1st place (Rank 0) cannot attack
+  const availableSpells = rank === 0 
+    ? SPELLS.filter(s => s.type !== 'attack')
+    : SPELLS;
 
   useEffect(() => {
     if (timeLeft > 0) {
@@ -28,10 +34,15 @@ export const RestingRound: React.FC<RestingRoundProps> = ({ round, roomId }) => 
       <div className="text-center mb-8 animate-fade-in-up">
         <h2 className="text-2xl font-bold text-slate-200">INTERMISSION</h2>
         <p className="text-slate-400">Choose your weapon for Round {round + 1}</p>
+        {rank === 0 && (
+            <p className="text-yellow-500 text-sm mt-2 font-bold animate-pulse">
+                You are in 1st Place! Attacks disabled.
+            </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10 w-full animate-fade-in-up md:px-12">
-        {SPELLS.map(spell => (
+        {availableSpells.map(spell => (
           <button
             key={spell.id}
             onClick={() => handleSelectSpell(spell.id)}
@@ -50,6 +61,15 @@ export const RestingRound: React.FC<RestingRoundProps> = ({ round, roomId }) => 
                 <span className="text-indigo-400 animate-pulse-slow">●</span>
               )}
             </div>
+            
+            {/* Type Badge */}
+            <span className={`
+                text-[10px] uppercase font-bold px-2 py-0.5 rounded opacity-70 mb-2 inline-block
+                ${spell.type === 'attack' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}
+            `}>
+                {spell.type}
+            </span>
+
             <p className="text-sm text-slate-400 group-hover:text-slate-300 leading-relaxed">
               {spell.description}
             </p>
