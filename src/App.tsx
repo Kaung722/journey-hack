@@ -52,7 +52,7 @@ function App() {
       setRound(round);
       
       // Check if we are targeted by any spells
-      const mySpells = activeSpells?.[socket.id] || [];
+      const mySpells = activeSpells?.[socket.id || ''] || [];
       setInitialSpells(mySpells);
 
       // Only do countdown for Round 1 (Lobby -> Game)
